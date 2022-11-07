@@ -19,7 +19,7 @@ pub(crate) enum ItemError {
     PrettifyError(String),
 }
 
-impl From<JsonError> for ItemError {
+impl<'a> From<JsonError<'a>> for ItemError {
     fn from(err: JsonError) -> Self {
         Self::PrettifyError(err.to_string())
     }
