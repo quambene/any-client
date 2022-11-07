@@ -17,11 +17,15 @@ pub struct Client {
 }
 
 pub fn prettify(obj: &str) -> Result<String, JsonError> {
-    let obj: Value = serde_json::from_str(obj)?;
+    let obj: Value = serde_json::from_str(obj).map_err(|err| JsonError::DeserializeError {
+        err: err.to_string(),
+        payload: obj,
+    })?;
     let buf = Vec::new();
     let formatter = pretty_json::Formatter::with_indent(b"    ");
     let mut ser = serde_json::Serializer::with_formatter(buf, formatter);
-    obj.serialize(&mut ser)?;
+    obj.serialize(&mut ser)
+        .map_err(|err| JsonError::SerializeError(err.to_string()))?;
     Ok(String::from_utf8(ser.into_inner())?)
 }
 
@@ -34,28 +38,22 @@ pub fn prettify_json(obj: Value) -> Result<String, anyhow::Error> {
 }
 
 #[derive(Error, Debug)]
-pub enum JsonError {
+pub enum JsonError<'a> {
     #[error("Can't serialize object: {0}")]
     SerializeError(String),
-    #[error("Can't deserialize string: {0}")]
-    DeserializeError(String),
+    #[error("Can't deserialize string: {err} in payload {payload}")]
+    DeserializeError { err: String, payload: &'a str },
     #[error("Can't convert to string: {0}")]
     Utf8Errror(String),
 }
 
-impl From<serde_json::Error> for JsonError {
-    fn from(err: serde_json::Error) -> Self {
-        Self::DeserializeError(err.to_string())
-    }
-}
-
-impl From<io::Error> for JsonError {
+impl<'a> From<io::Error> for JsonError<'a> {
     fn from(err: std::io::Error) -> Self {
         Self::SerializeError(err.to_string())
     }
 }
 
-impl From<FromUtf8Error> for JsonError {
+impl<'a> From<FromUtf8Error> for JsonError<'a> {
     fn from(err: FromUtf8Error) -> Self {
         Self::Utf8Errror(err.to_string())
     }
