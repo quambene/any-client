@@ -1,8 +1,5 @@
 use crate::client::{prettify, JsonError};
-use std::{
-    fmt,
-    str::{self, Utf8Error},
-};
+use std::{fmt, str};
 use thiserror::Error;
 use tungstenite::Message;
 
@@ -13,8 +10,8 @@ pub(crate) struct Item {
 
 #[derive(Error, Debug)]
 pub(crate) enum ItemError {
-    #[error("Can't convert to string: {0}")]
-    Utf8Error(String),
+    #[error("Can't convert to string: {err} in payload {payload}")]
+    Utf8Error { err: String, payload: String },
     #[error("Can't prettify json: {0}")]
     PrettifyError(String),
 }
@@ -42,25 +39,38 @@ impl TryFrom<Message> for Item {
                 Ok(item)
             }
             Message::Binary(ref data) => {
-                let content = str::from_utf8(data)?;
+                let content = str::from_utf8(data).map_err(|err| ItemError::Utf8Error {
+                    err: err.to_string(),
+                    payload: String::from_utf8_lossy(data).to_string(),
+                })?;
                 let content = prettify(content)?;
                 let item = Item::new(content, "Binary".to_string());
                 Ok(item)
             }
             Message::Ping(ref data) => {
-                let content = str::from_utf8(data)?;
+                let content = str::from_utf8(data).map_err(|err| ItemError::Utf8Error {
+                    err: err.to_string(),
+                    payload: String::from_utf8_lossy(data).to_string(),
+                })?;
                 let content = prettify(content)?;
                 let item = Item::new(content, "Ping".to_string());
                 Ok(item)
             }
             Message::Pong(ref data) => {
-                let content = str::from_utf8(data)?;
+                let content = str::from_utf8(data).map_err(|err| ItemError::Utf8Error {
+                    err: err.to_string(),
+                    payload: String::from_utf8_lossy(data).to_string(),
+                })?;
                 let content = prettify(content)?;
                 let item = Item::new(content, "Pong".to_string());
                 Ok(item)
             }
             Message::Frame(frame) => {
-                let content = str::from_utf8(frame.payload())?;
+                let content =
+                    str::from_utf8(frame.payload()).map_err(|err| ItemError::Utf8Error {
+                        err: err.to_string(),
+                        payload: String::from_utf8_lossy(frame.payload()).to_string(),
+                    })?;
                 let content = prettify(content)?;
                 let item = Item::new(content, "Frame".to_string());
                 Ok(item)
@@ -73,12 +83,6 @@ impl TryFrom<Message> for Item {
             }
             Message::Close(None) => Ok(Item::new("Close".to_string(), "Close".to_string())),
         }
-    }
-}
-
-impl From<Utf8Error> for ItemError {
-    fn from(err: Utf8Error) -> Self {
-        Self::Utf8Error(err.to_string())
     }
 }
 
